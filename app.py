@@ -6,38 +6,51 @@ import zipfile
 
 st.set_page_config(page_title="Generator Dopisa", page_icon="📄")
 
-st.title("📄 Generator Dopisa")
-st.write("Automatizujte izradu Word dokumenata iz Excel tabele.")
+st.title("📄 Generator Dopisa iz Excela")
+st.info("Ovaj alat menja markere poput {{ Naziv_kupca }} u Wordu podacima iz Excela.")
 
-# Polja za otpremanje
+# Upload sekcija
 u_excel = st.file_uploader("1. Otpremi Excel tabelu (.xlsx)", type=["xlsx"])
 u_word = st.file_uploader("2. Otpremi Word šablon (.docx)", type=["docx"])
 
 if u_excel and u_word:
+    # Učitavanje podataka
     df = pd.read_excel(u_excel)
-    st.success("Podaci učitani!")
-    st.dataframe(df.head(3)) # Prikazuje prva 3 reda
     
-    # Korisnik bira kolonu po kojoj će se zvati fajlovi
-    kolona_za_ime = st.selectbox("Izaberi kolonu za nazive fajlova:", df.columns)
+    # Čišćenje naziva kolona (menja razmak u donju crtu da bi Word lakše čitao)
+    df.columns = [c.replace(' ', '_') for c in df.columns]
+    
+    st.success("Podaci su uspešno učitani!")
+    st.write("Dostupne kolone (koristi ove nazive u Wordu unutar {{ }}):")
+    st.code(", ".join(df.columns))
+    
+    # Izbor kolone za naziv fajla
+    kolona_za_ime = st.selectbox("Izaberi kolonu za naziv generisanih fajlova:", df.columns)
 
-    if st.button("Pokreni generisanje"):
+    if st.button("🚀 Generiši dopise"):
         zip_buffer = io.BytesIO()
         
         with zipfile.ZipFile(zip_buffer, "a", zipfile.ZIP_DEFLATED, False) as zip_f:
             for index, row in df.iterrows():
                 doc = DocxTemplate(u_word)
-                context = row.to_dict() # Pretvara red u podatke za Word
+                
+                # Pretvaranje reda u rečnik (context)
+                context = row.to_dict()
+                
+                # Popunjavanje šablona
                 doc.render(context)
                 
+                # Čuvanje u memoriju
                 doc_io = io.BytesIO()
                 doc.save(doc_io)
                 
-                naziv_fajla = f"{row[kolona_za_ime]}.docx"
-                zip_f.writestr(naziv_fajla, doc_io.getvalue())
+                # Naziv fajla (uklanjanje nedozvoljenih karaktera)
+                ime_fajla = str(row[kolona_za_ime]).replace("/", "-")
+                zip_f.writestr(f"{ime_fajla}_{index}.docx", doc_io.getvalue())
         
         st.download_button(
-            label="⬇️ Preuzmi sve dopise (ZIP)",
+            label="⬇️ Preuzmi ZIP sa dopisima",
             data=zip_buffer.getvalue(),
-            file_name="generisani_dopisi.zip"
+            file_name="generisani_dopisi.zip",
+            mime="application/zip"
         )
